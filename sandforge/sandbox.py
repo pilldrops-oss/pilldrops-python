@@ -104,7 +104,7 @@ class Sandbox:
         base = (api_url or cfg["api_url"]).rstrip("/")
         key = api_key or cfg["key"]
         if not base:
-            raise RuntimeError("no API URL — set SANDFORGE_API_URL or run `sandforge login`")
+            raise RuntimeError("no API URL — set PILLDROPS_API_URL to your PillDrops server")
         s = requests.Session()
         if key:
             s.headers["Authorization"] = f"Bearer {key}"
@@ -130,7 +130,7 @@ class Sandbox:
 
         r = s.post(f"{base}/v1/sandboxes", json=body, timeout=180)
         if r.status_code == 401:
-            raise PermissionError("invalid API key — run `sandforge login`")
+            raise PermissionError("invalid API key — check PILLDROPS_API_KEY")
         if not r.ok:
             raise RuntimeError(f"create failed ({r.status_code}): {r.text}")
         data = r.json()
@@ -314,7 +314,7 @@ def build_image(context_dir: str, tag: str, *,
     base = (api_url or cfg["api_url"]).rstrip("/")
     key = api_key or cfg["key"]
     if not base:
-        raise RuntimeError("no API URL — set SANDFORGE_API_URL or run `sandforge login`")
+        raise RuntimeError("no API URL — set PILLDROPS_API_URL to your PillDrops server")
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         tar.add(context_dir, arcname=".")
