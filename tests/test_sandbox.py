@@ -15,6 +15,7 @@ from sandforge import Sandbox  # noqa: E402
 class _Handler(BaseHTTPRequestHandler):
     created_body = None
     exec_bodies = []
+    timeout_body = None
 
     def log_message(self, *_):
         pass
@@ -37,6 +38,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(200, {"stdout": "hello\n", "stderr": "", "exit_code": 0})
         elif self.path.endswith("/files"):
             self._json(200, {})
+        elif self.path.endswith("/timeout"):
+            _Handler.timeout_body = json.loads(raw)
+            self._json(200, {"status": "ok"})
         else:
             self._json(200, {"ok": True})
 
@@ -125,3 +129,10 @@ def test_connect_and_list(server):
     sb = Sandbox.connect("sb_test")
     assert sb.id == "sb_test" and sb.status == "running"
     assert any(x.get("id") == "sb_test" for x in Sandbox.list())
+
+
+def test_set_timeout_sends_seconds(server):
+    """The server reads "seconds"; any other field became a TTL of 0 and expired the sandbox."""
+    sb = Sandbox.connect("sb_test")
+    sb.set_timeout(600)
+    assert _Handler.timeout_body == {"seconds": 600}

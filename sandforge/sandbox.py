@@ -268,7 +268,7 @@ class Sandbox:
         self._req("POST", f"/v1/sandboxes/{self.id}/resume")
 
     def set_timeout(self, seconds: int) -> None:
-        self._req("POST", f"/v1/sandboxes/{self.id}/timeout", json={"timeout": seconds})
+        self._req("POST", f"/v1/sandboxes/{self.id}/timeout", json={"seconds": seconds})
 
     def logs(self) -> list:
         return self._req("GET", f"/v1/sandboxes/{self.id}/logs").json()

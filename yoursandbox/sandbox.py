@@ -199,7 +199,7 @@ class Sandbox:
 
     def set_timeout(self, seconds: int) -> dict:
         r = self._session.post(f"{self._BASE}/v1/sandboxes/{self.id}/timeout",
-            json={"timeout": seconds}, timeout=10)
+            json={"seconds": seconds}, timeout=10)
         r.raise_for_status(); return r.json()
 
     def refresh(self) -> dict:
