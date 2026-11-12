@@ -18,4 +18,4 @@ SANDFORGE_API_KEY env (E2B_/SANDBOX_ accepted as fallbacks), then ~/.sandforge/c
 from .sandbox import Sandbox, ExecResult, Templates, config, build_image
 
 __all__ = ["Sandbox", "ExecResult", "Templates", "config", "build_image"]
-__version__ = "1.1.0"
+__version__ = "1.1.1"

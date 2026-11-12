@@ -21,4 +21,4 @@ distribution as compatibility aliases of this package.
 from sandforge.sandbox import Sandbox, ExecResult, Templates, config, build_image
 
 __all__ = ["Sandbox", "ExecResult", "Templates", "config", "build_image"]
-__version__ = "1.1.0"
+__version__ = "1.1.1"
