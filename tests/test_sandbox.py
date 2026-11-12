@@ -16,6 +16,7 @@ class _Handler(BaseHTTPRequestHandler):
     created_body = None
     exec_bodies = []
     timeout_body = None
+    requests = []
 
     def log_message(self, *_):
         pass
@@ -29,6 +30,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(n)
+        _Handler.requests.append(self.path)
         if self.path == "/v1/sandboxes":
             _Handler.created_body = json.loads(raw)
             self._json(201, {"id": "sb_test", "template": "node-20",
@@ -48,6 +50,7 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(200, {"status": "destroyed"})
 
     def do_GET(self):
+        _Handler.requests.append(self.path)
         if self.path == "/v1/sandboxes":
             self._json(200, {"sandboxes": [{"id": "sb_test", "status": "running"}]})
         elif self.path.startswith("/v1/sandboxes/"):
@@ -61,6 +64,7 @@ class _Handler(BaseHTTPRequestHandler):
 def server(monkeypatch):
     _Handler.created_body = None
     _Handler.exec_bodies = []
+    _Handler.requests = []
     httpd = HTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -136,3 +140,17 @@ def test_set_timeout_sends_seconds(server):
     sb = Sandbox.connect("sb_test")
     sb.set_timeout(600)
     assert _Handler.timeout_body == {"seconds": 600}
+
+
+# A stripped leading slash sent /tmp/a.txt to <home>/tmp/a.txt without a word.
+def test_absolute_paths_are_sent_unchanged(server, tmp_path):
+    (tmp_path / "a.txt").write_text("A")
+    with Sandbox.create() as sb:
+        sb.upload(str(tmp_path / "a.txt"), "/root/a.txt")
+        sb.upload(str(tmp_path), "/app")
+        sb.download("/root/a.txt", str(tmp_path / "back.txt"))
+        sb.files.list()
+    assert "/v1/sandboxes/sb_test/files?path=%2Froot%2Fa.txt" in _Handler.requests
+    assert any("-C /app " in e["cmd"] for e in _Handler.exec_bodies)
+    assert any(e["cmd"].startswith("test -d /root/a.txt") for e in _Handler.exec_bodies)
+    assert "/v1/sandboxes/sb_test/filesystem/list?path=." in _Handler.requests

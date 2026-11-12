@@ -28,8 +28,8 @@ from pilldrops import Sandbox
 
 with Sandbox.create(template="python-3.11") as sb:          # destroyed on exit
     print(sb.run("python3 -c 'print(6*7)'").stdout)          # 42
-    sb.files.write("/app/main.py", "print('hello')")
-    print(sb.run("python3 main.py", cwd="/app").stdout)      # hello
+    sb.files.write("app/main.py", "print('hello')")           # relative to the sandbox home
+    print(sb.run("python3 app/main.py").stdout)              # hello
     sb.upload("./project", "/project")                       # a whole directory
     sb.pause()
     sb.resume()                                              # same memory, same processes
