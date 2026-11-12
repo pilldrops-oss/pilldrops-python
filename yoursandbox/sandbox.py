@@ -62,7 +62,7 @@ class _Filesystem:
         r.raise_for_status()
         return r.text
 
-    def list(self, path: str = "/") -> List[Dict]:
+    def list(self, path: str = ".") -> List[Dict]:
         r = self._s.get(f"{self._base}/v1/sandboxes/{self._id}/filesystem/list",
             params={"path": path}, timeout=10)
         r.raise_for_status()

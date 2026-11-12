@@ -66,7 +66,7 @@ class _Filesystem:
         r = self._sb._req("GET", f"/v1/sandboxes/{self._sb.id}/files", params={"path": path})
         return r.text
 
-    def list(self, path: str = "/") -> List[Dict]:
+    def list(self, path: str = ".") -> List[Dict]:
         r = self._sb._req("GET", f"/v1/sandboxes/{self._sb.id}/filesystem/list", params={"path": path})
         body = r.json()
         return body.get("entries", []) if isinstance(body, dict) else body
@@ -216,18 +216,17 @@ class Sandbox:
         """Write a snippet to a workspace file and run it — the E2B-style convenience."""
         ext = {"python": "py", "node": "js", "bash": "sh"}.get(lang, "txt")
         runner = {"python": "python3", "node": "node", "bash": "bash"}.get(lang, "cat")
-        # Workspace-relative path: the /files API roots at /workspace and exec's
-        # cwd is /workspace, so a relative path is visible to both.
+        # A relative path: the /files API and exec's cwd both start at the
+        # sandbox home, so it is visible to both.
         name = f"_sf_{int(time.time()*1000)}.{ext}"
         self.files.write(name, code)
         return self.run(f"{runner} {name}")
 
-    # ── files (directory-aware; paths are relative to the /workspace root) ────
+    # ── files (directory-aware; relative paths start at the sandbox home) ────
     def upload(self, local: str, remote: str) -> None:
-        """Upload a file or an entire directory. Paths are relative to the
-        sandbox workspace (/workspace) — e.g. upload('./app', 'app')."""
+        """Upload a file or an entire directory. A relative remote is under the
+        sandbox home; an absolute one is used as given."""
         p = Path(local)
-        remote = remote.lstrip("/")
         if p.is_dir():
             self._upload_tar(p, remote)
         else:
@@ -238,15 +237,14 @@ class Sandbox:
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
             tar.add(str(local_dir), arcname=".")
         buf.seek(0)
-        # Upload the tar into the workspace, then untar it there via exec (cwd is
-        # /workspace, so the relative tar path and target dir both resolve).
+        # Upload the tar into the home, then untar it via exec (cwd is the home,
+        # so the relative tar path resolves).
         tmp = f"_sf_up_{int(time.time()*1000)}.tgz"
         self.files.write(tmp, buf.read())
         self.run(f"mkdir -p {remote} && tar -xzf {tmp} -C {remote} && rm -f {tmp}").check()
 
     def download(self, remote: str, local: str) -> None:
         """Download a file (to a local path) or a directory (unpacked into local)."""
-        remote = remote.lstrip("/")
         if self.run(f"test -d {remote} && echo DIR || echo FILE").stdout.startswith("DIR"):
             tmp = f"_sf_dl_{int(time.time()*1000)}.tgz"
             self.run(f"tar -czf {tmp} -C {remote} .").check()
