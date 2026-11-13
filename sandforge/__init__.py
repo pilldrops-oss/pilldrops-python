@@ -15,7 +15,9 @@ Credentials + endpoint resolve from (in order): explicit args, SANDFORGE_API_URL
 SANDFORGE_API_KEY env (E2B_/SANDBOX_ accepted as fallbacks), then ~/.sandforge/config.json
 (written by `sandforge login`).
 """
-from .sandbox import Sandbox, ExecResult, Templates, config, build_image
+from .sandbox import (Sandbox, ExecResult, Templates, Webhooks, config, build_image,
+                      verify_webhook_signature)
 
-__all__ = ["Sandbox", "ExecResult", "Templates", "config", "build_image"]
+__all__ = ["Sandbox", "ExecResult", "Templates", "Webhooks", "config", "build_image",
+           "verify_webhook_signature"]
 __version__ = "1.1.1"

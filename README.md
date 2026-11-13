@@ -51,6 +51,37 @@ app.kill()
 | `sb.logs()` · `sb.metrics()` | observability |
 | `build_image(context_dir, tag)` | build a custom image from a Dockerfile; launch it with `Sandbox.create(image=…)` |
 
+## Webhooks
+
+Get a signed POST when a sandbox in your org changes state. These take the org
+API key.
+
+```python
+from pilldrops import Webhooks, verify_webhook_signature
+
+hooks = Webhooks()
+created = hooks.create("https://example.com/hook", ["sandbox.ended"])
+secret = created["secret"]                                   # store it now: returned only here
+
+# in your endpoint, with the raw request body
+ok = verify_webhook_signature(secret, headers["x-pilldrops-timestamp"],
+                              headers["x-pilldrops-signature"], raw_body)
+```
+
+| | |
+|---|---|
+| `hooks.list()` · `hooks.create(url, events)` · `hooks.delete(id)` | manage endpoints |
+| `hooks.test(id)` | send one signed probe: `{"ok", "status", "error"}` |
+| `hooks.set_enabled(id, enabled)` | pause or resume deliveries |
+| `hooks.deliveries()` | recent deliveries, newest first |
+| `verify_webhook_signature(secret, timestamp, signature, body, tolerance=300)` | `True` when the signature matches and the timestamp is fresh |
+
+Events: `sandbox.created`, `sandbox.ended`, `sandbox.paused`, `sandbox.resumed`,
+`sandbox.checkpointed`, `sandbox.forked`, `sandbox.restarted`, `sandbox.crashed`,
+`sandbox.out_of_memory`, `sandbox.unreachable`. The body is
+`{"id", "type", "at", "sandbox": {"id", "template"}, "data"}`. Retries reuse
+`id` (also in `x-pilldrops-delivery`), so dedupe on it.
+
 `import sandforge` and `import yoursandbox` still work: they ship in this
 package as aliases of its earlier names.
 
