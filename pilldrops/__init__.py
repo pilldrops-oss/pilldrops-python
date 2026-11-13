@@ -23,4 +23,4 @@ from sandforge.sandbox import (Sandbox, ExecResult, Templates, Webhooks, config,
 
 __all__ = ["Sandbox", "ExecResult", "Templates", "Webhooks", "config", "build_image",
            "verify_webhook_signature"]
-__version__ = "1.1.1"
+__version__ = "1.2.0"
