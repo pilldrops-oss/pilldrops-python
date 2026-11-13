@@ -1,4 +1,6 @@
 """SandForge sandbox client. See package docstring for usage."""
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -343,3 +345,64 @@ class Templates:
 
     def list(self) -> list:
         return self._s.get(f"{self._base}/v1/templates", timeout=15).json()
+
+
+class Webhooks:
+    """Org-level webhooks: a signed POST for sandbox lifecycle events."""
+
+    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
+        cfg = config()
+        self._base = (api_url or cfg["api_url"]).rstrip("/")
+        if not self._base:
+            raise RuntimeError("no API URL — set PILLDROPS_API_URL to your PillDrops server")
+        self._s = requests.Session()
+        key = api_key or cfg["key"]
+        if key:
+            self._s.headers["Authorization"] = f"Bearer {key}"
+
+    def _req(self, method: str, path: str, **kw) -> dict:
+        r = self._s.request(method, f"{self._base}{path}", timeout=30, **kw)
+        if r.status_code == 404:
+            raise RuntimeError(f"not found: {path}")
+        if not r.ok:
+            raise RuntimeError(f"{method} {path} → {r.status_code}: {r.text[:200]}")
+        return r.json()
+
+    def list(self) -> List[Dict]:
+        return self._req("GET", "/v1/webhooks").get("webhooks", [])
+
+    def create(self, url: str, events: List[str]) -> dict:
+        """Register an endpoint. The reply's "secret" signs every delivery and
+        is not returned again."""
+        return self._req("POST", "/v1/webhooks", json={"url": url, "events": list(events)})
+
+    def delete(self, webhook_id: str) -> None:
+        self._req("DELETE", f"/v1/webhooks/{webhook_id}")
+
+    def test(self, webhook_id: str) -> dict:
+        """Send one signed probe. A failing endpoint returns ok=False, it does not raise."""
+        return self._req("POST", f"/v1/webhooks/{webhook_id}/test")
+
+    def set_enabled(self, webhook_id: str, enabled: bool) -> dict:
+        return self._req("POST", f"/v1/webhooks/{webhook_id}/toggle", json={"enabled": enabled})
+
+    def deliveries(self) -> List[Dict]:
+        """Recent deliveries, newest first."""
+        return self._req("GET", "/v1/webhooks/deliveries").get("deliveries", [])
+
+
+def verify_webhook_signature(secret: str, timestamp: str, signature: str,
+                             body: Union[str, bytes], tolerance: int = 300) -> bool:
+    """Check a delivery against its x-pilldrops-timestamp and
+    x-pilldrops-signature headers. Pass the raw request body, not re-serialized
+    JSON. False for a bad signature or a timestamp more than `tolerance` seconds
+    from now."""
+    if not (timestamp.isascii() and timestamp.isdigit()):
+        return False
+    if abs(time.time() - int(timestamp)) > tolerance:
+        return False
+    if isinstance(body, str):
+        body = body.encode()
+    expected = "sha256=" + hmac.new(secret.encode(), timestamp.encode() + b"." + body,
+                                    hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected.encode(), signature.encode())
