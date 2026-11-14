@@ -18,9 +18,9 @@ PILLDROPS_API_KEY env (SANDFORGE_/E2B_/SANDBOX_ accepted as fallbacks), then
 `import sandforge` and `import yoursandbox` keep working — they ship in the same
 distribution as compatibility aliases of this package.
 """
-from sandforge.sandbox import (Sandbox, ExecResult, Templates, Webhooks, config, build_image,
+from sandforge.sandbox import (Sandbox, ExecResult, Templates, Webhooks, config, build_image, APIError, AuthError,
                                verify_webhook_signature)
 
-__all__ = ["Sandbox", "ExecResult", "Templates", "Webhooks", "config", "build_image",
+__all__ = ["Sandbox", "ExecResult", "Templates", "Webhooks", "config", "build_image", "APIError", "AuthError",
            "verify_webhook_signature"]
 __version__ = "1.2.0"

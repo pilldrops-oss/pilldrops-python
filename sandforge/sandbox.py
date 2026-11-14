@@ -12,6 +12,19 @@ from typing import Dict, List, Optional, Union
 
 import requests
 
+
+class APIError(RuntimeError):
+    """An HTTP failure from the PillDrops API, with the status and the response body."""
+
+    def __init__(self, message: str, response: requests.Response):
+        super().__init__(message)
+        self.status = response.status_code
+        self.body = response.text
+
+
+class AuthError(APIError, PermissionError):
+    """The API refused the key (401). Still a PermissionError, as before."""
+
 _CONFIG_PATH = os.environ.get("SANDFORGE_CONFIG") or str(Path.home() / ".sandforge" / "config.json")
 
 
@@ -132,9 +145,9 @@ class Sandbox:
 
         r = s.post(f"{base}/v1/sandboxes", json=body, timeout=180)
         if r.status_code == 401:
-            raise PermissionError("invalid API key — check PILLDROPS_API_KEY")
+            raise AuthError("invalid API key — check PILLDROPS_API_KEY", r)
         if not r.ok:
-            raise RuntimeError(f"create failed ({r.status_code}): {r.text}")
+            raise APIError(f"create failed ({r.status_code}): {r.text}", r)
         data = r.json()
         return cls(data["id"], s, base, info=data)
 
@@ -151,9 +164,9 @@ class Sandbox:
             s.headers["Authorization"] = f"Bearer {key}"
         r = s.get(f"{base}/v1/sandboxes/{sandbox_id}", timeout=30)
         if r.status_code == 404:
-            raise RuntimeError(f"sandbox not found: {sandbox_id}")
+            raise APIError(f"sandbox not found: {sandbox_id}", r)
         if not r.ok:
-            raise RuntimeError(f"connect failed ({r.status_code}): {r.text[:200]}")
+            raise APIError(f"connect failed ({r.status_code}): {r.text[:200]}", r)
         return cls(sandbox_id, s, base, info=r.json())
 
     @classmethod
@@ -168,7 +181,7 @@ class Sandbox:
             s.headers["Authorization"] = f"Bearer {key}"
         r = s.get(f"{base}/v1/sandboxes", timeout=30)
         if not r.ok:
-            raise RuntimeError(f"list failed ({r.status_code}): {r.text[:200]}")
+            raise APIError(f"list failed ({r.status_code}): {r.text[:200]}", r)
         data = r.json()
         # The API returns either a bare list or {"sandboxes": [...]}.
         return data.get("sandboxes", data) if isinstance(data, dict) else data
@@ -286,9 +299,9 @@ class Sandbox:
     def _req(self, method: str, path: str, timeout: int = 30, **kw) -> requests.Response:
         r = self._s.request(method, f"{self._base}{path}", timeout=timeout, **kw)
         if r.status_code == 404:
-            raise RuntimeError(f"not found: {path}")
+            raise APIError(f"not found: {path}", r)
         if not r.ok:
-            raise RuntimeError(f"{method} {path} → {r.status_code}: {r.text[:200]}")
+            raise APIError(f"{method} {path} → {r.status_code}: {r.text[:200]}", r)
         return r
 
     def __enter__(self) -> "Sandbox":
@@ -325,7 +338,7 @@ def build_image(context_dir: str, tag: str, *,
     r = s.post(f"{base}/v1/images/build", params={"name": tag}, data=buf.read(),
                headers={"Content-Type": "application/octet-stream"}, timeout=1500)
     if not r.ok:
-        raise RuntimeError(f"image build request failed ({r.status_code}): {r.text[:300]}")
+        raise APIError(f"image build request failed ({r.status_code}): {r.text[:300]}", r)
     d = r.json()
     if not d.get("ok"):
         raise RuntimeError("image build failed:\n" + (d.get("log") or "")[-2000:])
@@ -363,9 +376,9 @@ class Webhooks:
     def _req(self, method: str, path: str, **kw) -> dict:
         r = self._s.request(method, f"{self._base}{path}", timeout=30, **kw)
         if r.status_code == 404:
-            raise RuntimeError(f"not found: {path}")
+            raise APIError(f"not found: {path}", r)
         if not r.ok:
-            raise RuntimeError(f"{method} {path} → {r.status_code}: {r.text[:200]}")
+            raise APIError(f"{method} {path} → {r.status_code}: {r.text[:200]}", r)
         return r.json()
 
     def list(self) -> List[Dict]:
