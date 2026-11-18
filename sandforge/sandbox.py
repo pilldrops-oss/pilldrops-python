@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+from urllib.parse import quote
 
 import requests
 
@@ -402,6 +403,91 @@ class Webhooks:
     def deliveries(self) -> List[Dict]:
         """Recent deliveries, newest first."""
         return self._req("GET", "/v1/webhooks/deliveries").get("deliveries", [])
+
+
+class Functions:
+    """Functions: code that starts on request and scales to zero when idle."""
+
+    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
+        cfg = config()
+        self._base = (api_url or cfg["api_url"]).rstrip("/")
+        if not self._base:
+            raise RuntimeError("no API URL — set PILLDROPS_API_URL to your PillDrops server")
+        self._s = requests.Session()
+        key = api_key or cfg["key"]
+        if key:
+            self._s.headers["Authorization"] = f"Bearer {key}"
+
+    def _req(self, method: str, path: str, **kw) -> dict:
+        r = self._s.request(method, f"{self._base}{path}", timeout=30, **kw)
+        if r.status_code == 404:
+            raise APIError(f"not found: {path}", r)
+        if not r.ok:
+            raise APIError(f"{method} {path} → {r.status_code}: {r.text[:200]}", r)
+        return r.json()
+
+    @staticmethod
+    def _path(name: str) -> str:
+        return f"/v1/functions/{quote(name, safe='')}"
+
+    def list(self) -> List[Dict]:
+        return self._req("GET", "/v1/functions").get("functions", [])
+
+    def get(self, name: str) -> dict:
+        return self._req("GET", self._path(name))
+
+    def create(self, name: str, start: str, *, template: Optional[str] = None, port: Optional[int] = None,
+               vcpu: Optional[int] = None, memory_mb: Optional[int] = None, max_replicas: Optional[int] = None,
+               replica_concurrency: Optional[int] = None, idle_timeout: Optional[int] = None,
+               public: Optional[bool] = None, env: Optional[Dict[str, str]] = None,
+               files: Optional[List[Dict[str, str]]] = None) -> dict:
+        """files is [{"path", "content"}]. idle_timeout=0 keeps one replica warm."""
+        body = {k: v for k, v in locals().items() if k != "self" and v is not None}
+        return self._req("POST", "/v1/functions", json=body)
+
+    def update(self, name: str, *, start: Optional[str] = None, template: Optional[str] = None,
+               port: Optional[int] = None, vcpu: Optional[int] = None, memory_mb: Optional[int] = None,
+               max_replicas: Optional[int] = None, replica_concurrency: Optional[int] = None,
+               idle_timeout: Optional[int] = None, public: Optional[bool] = None,
+               env: Optional[Dict[str, str]] = None, files: Optional[List[Dict[str, str]]] = None) -> None:
+        """Send only the fields given; the rest keep their stored values. env={} clears env."""
+        body = {k: v for k, v in locals().items() if k not in ("self", "name") and v is not None}
+        self._req("PUT", self._path(name), json=body)
+
+    def delete(self, name: str) -> None:
+        self._req("DELETE", self._path(name))
+
+    def invoke(self, name: str, path: str = "", *, method: str = "POST", **kw) -> requests.Response:
+        """Call the function with the API key. Returns the handler's response as
+        is, whatever its status; kw goes to requests (json=, data=, headers=, params=)."""
+        return self._call(self._s, f"{self._base}{self._path(name)}/invoke", path, method, kw)
+
+    def public_url(self, public_id: str) -> str:
+        """Key-less invoke URL of a public function (its "public_id")."""
+        return f"{self._base}/v1/public/functions/{quote(public_id, safe='')}/invoke"
+
+    def invoke_public(self, public_id: str, path: str = "", *, method: str = "POST", **kw) -> requests.Response:
+        """Like invoke, through the public URL and without the API key."""
+        return self._call(requests, self.public_url(public_id), path, method, kw)
+
+    @staticmethod
+    def _call(client, url: str, path: str, method: str, kw: dict) -> requests.Response:
+        if path.strip("/"):
+            url += "/" + quote(path.lstrip("/"), safe="/")
+        kw.setdefault("timeout", 60)
+        return client.request(method, url, **kw)
+
+    def rename(self, name: str, new_name: str) -> dict:
+        """The old invoke URL keeps working until "old_name_forwards_until" (unix seconds)."""
+        return self._req("POST", f"{self._path(name)}/rename", json={"name": new_name})
+
+    def deployments(self, name: str) -> List[Dict]:
+        """Deployments, newest first; the first one is what runs."""
+        return self._req("GET", f"{self._path(name)}/deployments").get("deployments", [])
+
+    def rollback(self, name: str, deployment_id: str) -> None:
+        """Raises APIError with status 409 when that deployment's code was not kept."""
+        self._req("POST", f"{self._path(name)}/deployments/{quote(deployment_id, safe='')}/rollback")
 
 
 def verify_webhook_signature(secret: str, timestamp: str, signature: str,
