@@ -20,4 +20,4 @@ from .sandbox import (Sandbox, ExecResult, Templates, Webhooks, Functions, confi
 
 __all__ = ["Sandbox", "ExecResult", "Templates", "Webhooks", "Functions", "config", "build_image", "APIError",
            "AuthError", "verify_webhook_signature"]
-__version__ = "1.2.0"
+__version__ = "1.3.0"
