@@ -82,6 +82,35 @@ Events: `sandbox.created`, `sandbox.ended`, `sandbox.paused`, `sandbox.resumed`,
 `{"id", "type", "at", "sandbox": {"id", "template"}, "data"}`. Retries reuse
 `id` (also in `x-pilldrops-delivery`), so dedupe on it.
 
+## Functions
+
+Code that starts on request and scales to zero when idle. These take the org
+API key.
+
+```python
+from pilldrops import Functions
+
+fns = Functions()
+fn = fns.create("hello", "python app.py", port=8000,
+                files=[{"path": "app.py", "content": open("app.py").read()}])
+r = fns.invoke("hello", "/greet", json={"name": "Ada"})   # a requests.Response, any status
+print(r.status_code, r.headers["content-type"], r.text)    # r.content for bytes
+
+fns.update("hello", public=True)                          # only the fields given change
+pub = fns.get("hello")["public_id"]
+fns.invoke_public(pub, method="GET")                      # no API key sent
+```
+
+| | |
+|---|---|
+| `fns.list()` · `fns.get(name)` · `fns.delete(name)` | read and remove |
+| `fns.create(name, start, template=, port=, vcpu=, memory_mb=, max_replicas=, replica_concurrency=, idle_timeout=, public=, env=, files=)` | deploy; `idle_timeout=0` keeps one replica warm |
+| `fns.update(name, **same fields)` | change only what is passed; `public=False` turns key-less invoke off, `env={}` clears env |
+| `fns.invoke(name, path="", method="POST", **requests_kwargs)` | call it; returns the handler's raw response and never raises on its status |
+| `fns.public_url(public_id)` · `fns.invoke_public(public_id, path="", method="POST", ...)` | key-less invoke of a public function |
+| `fns.rename(name, new_name)` | the old invoke URL forwards until `old_name_forwards_until` (7 days) |
+| `fns.deployments(name)` · `fns.rollback(name, deployment_id)` | newest first, the first one runs; rollback raises `APIError` with status 409 when that code was not kept |
+
 `import sandforge` and `import yoursandbox` still work: they ship in this
 package as aliases of its earlier names.
 
